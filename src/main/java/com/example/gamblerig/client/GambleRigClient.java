@@ -1,15 +1,10 @@
 package com.example.gamblerig.client;
 
-import com.example.gamblerig.StatusPayload;
 import com.example.gamblerig.TogglePayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.util.Identifier;
@@ -24,39 +19,12 @@ public class GambleRigClient implements ClientModInitializer {
         KeyBinding toggle = KeyBindingHelper.registerKeyBinding(new KeyBinding(
             "key.gamblerig.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_X, category));
 
-        ClientPlayNetworking.registerGlobalReceiver(StatusPayload.ID, (payload, context) -> {
-            ClientState.enabled = payload.enabled();
-            ClientState.left = payload.left();
-            ClientState.right = payload.right();
-            ClientState.last = payload.last();
-        });
-
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (menu.wasPressed()) client.setScreen(new RigScreen());
             while (toggle.wasPressed() && client.player != null) {
-                ClientState.enabled = !ClientState.enabled;           // instant feedback; server confirms
+                ClientState.enabled = !ClientState.enabled;
                 ClientPlayNetworking.send(TogglePayload.INSTANCE);
             }
         });
-
-        // Top-right HUD
-        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, Identifier.of("gamblerig", "hud"),
-            (ctx, tickCounter) -> drawHud(ctx));
-    }
-
-    private static void drawHud(DrawContext ctx) {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null) return;
-        int w = mc.getWindow().getScaledWidth();
-        String status = ClientState.enabled ? "RIG: ENABLED" : "RIG: DISABLED";
-        int color = ClientState.enabled ? 0xFF55FF55 : 0xFFFF5555;
-        String[] lines = { status, "L: " + ClientState.left, "R: " + ClientState.right, "Last: " + ClientState.last };
-        int[] colors = { color, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFF55 };
-        int y = 6;
-        for (int i = 0; i < lines.length; i++) {
-            int x = w - mc.textRenderer.getWidth(lines[i]) - 6;
-            ctx.drawTextWithShadow(mc.textRenderer, lines[i], x, y, colors[i]);
-            y += 11;
-        }
     }
 }

@@ -38,7 +38,6 @@ public abstract class DispenserBlockEntityMixin {
             st.pending.put(plan.leftPos().asLong(), plan.leftSlot());
             st.pending.put(plan.rightPos().asLong(), plan.rightSlot());
             st.pendingTick = now;
-            st.last = "L=" + plan.leftNum() + "  R=" + plan.rightNum();
         }
 
         Integer forced = st.pending.remove(key);

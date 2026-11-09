@@ -1,7 +1,6 @@
 package com.example.gamblerig;
 
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
@@ -30,7 +29,6 @@ public class GambleRig implements ModInitializer {
         public volatile boolean enabled = false;          // X toggles this
         public final Map<Long, Integer> pending = new HashMap<>();  // dispenser pos -> forced slot
         public long pendingTick = -1000;
-        public volatile String last = "-";
     }
 
     public static final Map<UUID, RigState> STATES = new ConcurrentHashMap<>();
@@ -46,7 +44,6 @@ public class GambleRig implements ModInitializer {
     public void onInitialize() {
         PayloadTypeRegistry.playC2S().register(TogglePayload.ID, TogglePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(FillPayload.ID, FillPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(StatusPayload.ID, StatusPayload.CODEC);
 
         // X: toggle auto win
         ServerPlayNetworking.registerGlobalReceiver(TogglePayload.ID, (payload, context) -> {
@@ -55,8 +52,6 @@ public class GambleRig implements ModInitializer {
             RigState s = state(player.getUuid());
             s.enabled = !s.enabled;
             player.sendMessage(Text.literal("[Rig] Auto win: " + (s.enabled ? "ENABLED" : "DISABLED")), true);
-            ServerWorld w = worldOf(context.server(), player);
-            if (w != null) sendStatus(w, player, s);
         });
 
         // Menu: fill the two nearest dispensers with <item> named 1-9
@@ -83,32 +78,7 @@ public class GambleRig implements ModInitializer {
                 d.markDirty();
             }
             player.sendMessage(Text.literal("[Rig] Filled both dispensers with " + payload.item().getPath() + " (1-9)"), true);
-            sendStatus(w, player, state(player.getUuid()));
         });
-
-        // Keep the HUD updated
-        ServerTickEvents.END_SERVER_TICK.register(server -> {
-            if (server.getTicks() % 10 != 0) return;
-            for (ServerWorld w : server.getWorlds()) {
-                for (ServerPlayerEntity pl : w.getPlayers()) {
-                    RigState s = STATES.get(pl.getUuid());
-                    if (s != null) sendStatus(w, pl, s);
-                }
-            }
-        });
-    }
-
-    public static void sendStatus(ServerWorld w, ServerPlayerEntity pl, RigState s) {
-        if (!ServerPlayNetworking.canSend(pl, StatusPayload.ID)) return;
-        String l = "none", r = "none";
-        BlockPos[] pair = Rigger.pair(w, pl);
-        if (pair != null) {
-            DispenserBlockEntity L = Rigger.dispenser(w, pair[0]);
-            DispenserBlockEntity R = Rigger.dispenser(w, pair[1]);
-            if (L != null) l = Rigger.describe(L);
-            if (R != null) r = Rigger.describe(R);
-        }
-        ServerPlayNetworking.send(pl, new StatusPayload(s.enabled, l, r, s.last));
     }
 
     public static ServerWorld worldOf(MinecraftServer server, ServerPlayerEntity player) {
