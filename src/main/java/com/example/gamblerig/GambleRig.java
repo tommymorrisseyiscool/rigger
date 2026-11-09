@@ -86,7 +86,7 @@ public class GambleRig implements ModInitializer {
             sendStatus(w, player, state(player.getUuid()));
         });
 
-        // Keep the HUD updated (only for players who have used the mod)
+        // Keep the HUD updated
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (server.getTicks() % 10 != 0) return;
             for (ServerWorld w : server.getWorlds()) {
