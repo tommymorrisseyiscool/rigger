@@ -1,5 +1,6 @@
 {
   "key.gamblerig.menu": "Open Rig Menu",
   "key.gamblerig.toggle": "Toggle Auto Win",
-  "key.category.gamblerig.main": "Gamble Rig"
+  "key.category.gamblerig.main": "Gamble Rig",
+  "key.gamblerig.hud": "Show/Hide Rig HUD"
 }
