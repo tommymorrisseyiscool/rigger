@@ -16,6 +16,9 @@ import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 public class GambleRigClient implements ClientModInitializer {
+    // Faint green (ARGB) for the corner dot. Lower the first two hex digits (0x50) to make it fainter.
+    private static final int DOT_COLOR = 0x5000C800;
+
     @Override
     public void onInitializeClient() {
         KeyBinding.Category category = KeyBinding.Category.create(Identifier.of("gamblerig", "main"));
@@ -23,35 +26,59 @@ public class GambleRigClient implements ClientModInitializer {
             "key.gamblerig.menu", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, category));
         KeyBinding toggle = KeyBindingHelper.registerKeyBinding(new KeyBinding(
             "key.gamblerig.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_X, category));
+        KeyBinding hud = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+            "key.gamblerig.hud", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, category));
 
         ClientPlayNetworking.registerGlobalReceiver(StatusPayload.ID, (payload, context) -> {
             ClientState.enabled = payload.enabled();
             ClientState.left = payload.left();
             ClientState.right = payload.right();
             ClientState.last = payload.last();
+            ClientState.lastStatusMs = System.currentTimeMillis();
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (menu.wasPressed()) client.setScreen(new RigScreen());
+            while (hud.wasPressed()) ClientState.hudVisible = !ClientState.hudVisible;   // R: hide / unhide
             while (toggle.wasPressed() && client.player != null) {
                 ClientState.enabled = !ClientState.enabled;           // instant feedback; server confirms
                 ClientPlayNetworking.send(TogglePayload.INSTANCE);
             }
         });
 
-        // Top-right HUD
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, Identifier.of("gamblerig", "hud"),
-            (ctx, tickCounter) -> drawHud(ctx));
+            (ctx, tickCounter) -> draw(ctx));
     }
 
-    private static void drawHud(DrawContext ctx) {
+    private static void draw(DrawContext ctx) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
         int w = mc.getWindow().getScaledWidth();
-        String status = ClientState.enabled ? "RIG: ENABLED" : "RIG: DISABLED";
-        int color = ClientState.enabled ? 0xFF55FF55 : 0xFFFF5555;
-        String[] lines = { status, "L: " + ClientState.left, "R: " + ClientState.right, "Last: " + ClientState.last };
-        int[] colors = { color, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFF55 };
+        int h = mc.getWindow().getScaledHeight();
+        boolean connected = ClientState.connected();
+
+        // Tiny faint dot, bottom-right, only when the server has confirmed it is on
+        if (connected && ClientState.enabled) ctx.fill(w - 6, h - 6, w - 3, h - 3, DOT_COLOR);
+
+        // Top-right info (R hides it)
+        if (!ClientState.hudVisible) return;
+        String[] lines;
+        int[] colors;
+        if (connected) {
+            lines = new String[] {
+                ClientState.enabled ? "RIG: ENABLED" : "RIG: DISABLED",
+                "L: " + ClientState.left,
+                "R: " + ClientState.right,
+                "Win: " + ClientState.last };
+            colors = new int[] { ClientState.enabled ? 0xFF55FF55 : 0xFFFF5555, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFF55 };
+        } else {
+            lines = new String[] {
+                "RIG: NO REPLY FROM SERVER",
+                "mod missing on server, or",
+                "you are not in gamblerig.txt",
+                "type /gamblerig in chat" };
+            colors = new int[] { 0xFFFFAA00, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFF55 };
+        }
         int y = 6;
         for (int i = 0; i < lines.length; i++) {
             int x = w - mc.textRenderer.getWidth(lines[i]) - 6;

@@ -5,7 +5,7 @@ import com.example.gamblerig.Rigger;
 import net.minecraft.block.entity.DispenserBlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
@@ -23,7 +23,7 @@ public abstract class DispenserBlockEntityMixin {
 
         PlayerEntity p = world.getClosestPlayer(
             self.getPos().getX() + 0.5, self.getPos().getY() + 0.5, self.getPos().getZ() + 0.5,
-            12.0, e -> GambleRig.isEnabled(e.getUuid()));
+            16.0, e -> GambleRig.isEnabled(e.getUuid()));
         if (p == null) return;
 
         GambleRig.RigState st = GambleRig.state(p.getUuid());
@@ -32,13 +32,21 @@ public abstract class DispenserBlockEntityMixin {
 
         // The two dispensers fire at about the same time: plan the pair once, then hand out each result.
         if (now - st.pendingTick > 20 || !st.pending.containsKey(key)) {
-            Rigger.Plan plan = Rigger.plan(sw, p, random);
-            if (plan == null) return;
+            Rigger.Plan plan = Rigger.plan(sw, p, random, st.winLeft, self.getPos());
+            if (plan == null) {
+                p.sendMessage(Text.literal("[Rig] Need 2 dispensers/droppers with items within " + Rigger.RADIUS + " blocks"), true);
+                return;
+            }
             st.pending.clear();
-            st.pending.put(plan.leftPos().asLong(), plan.leftSlot());
-            st.pending.put(plan.rightPos().asLong(), plan.rightSlot());
+            st.pending.put(plan.winPos().asLong(), plan.winSlot());
+            st.pending.put(plan.losePos().asLong(), plan.loseSlot());
             st.pendingTick = now;
-            st.last = "L=" + plan.leftNum() + "  R=" + plan.rightNum();
+            int l = st.winLeft ? plan.winNum() : plan.loseNum();
+            int r = st.winLeft ? plan.loseNum() : plan.winNum();
+            st.last = "L=" + l + " R=" + r;
+            GambleRig.LOGGER.info("[GambleRig] rigged for {}: {} wins L={} R={}", p.getName().getString(),
+                st.winLeft ? "LEFT" : "RIGHT", l, r);
+            p.sendMessage(Text.literal("[Rig] " + (st.winLeft ? "LEFT" : "RIGHT") + " wins:  L=" + l + "  R=" + r), true);
         }
 
         Integer forced = st.pending.remove(key);
